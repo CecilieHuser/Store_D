@@ -3,6 +3,7 @@ from datetime import datetime
 from DbConnector import DbConnector
 from tabulate import tabulate
 import pandas as pd
+import time
 
 
 class InsertGeolifeDataset:
@@ -13,34 +14,37 @@ class InsertGeolifeDataset:
         self.cursor = self.connection.cursor
 
     # CREATE TABLES
-    def create_user_table(self, table_name):
-        query = f"""CREATE TABLE IF NOT EXISTS {table_name} (
+    def create_user_table(self):
+        query = f"""CREATE TABLE IF NOT EXISTS Users (
                    id INT NOT NULL PRIMARY KEY,
                    has_labels BOOLEAN)
                 """
         self.cursor.execute(query)
         self.db_connection.commit()
 
-    def create_activity_table(self, table_name):
-        query = f"""CREATE TABLE IF NOT EXISTS {table_name} (
+    def create_activity_table(self):
+        query = f"""CREATE TABLE IF NOT EXISTS Activity (
             id INT PRIMARY KEY AUTO_INCREMENT,
             user_id INT,
             transportation_mode VARCHAR(30),
             start_date_time DATETIME,
-            end_date_time DATETIME)
+            end_date_time DATETIME,
+            FOREIGN KEY (user_id) REFERENCES Users(id)
+)
         """
         self.cursor.execute(query)
         self.db_connection.commit()
 
-    def create_track_point_table(self, table_name):
-        query = f"""CREATE TABLE IF NOT EXISTS {table_name} (
+    def create_track_point_table(self):
+        query = f"""CREATE TABLE IF NOT EXISTS TrackPoint (
             id INT PRIMARY KEY AUTO_INCREMENT,
             activity_id INT,
             lat DOUBLE,
             lon DOUBLE,
             altitude DOUBLE,
             date_days DOUBLE,
-            date_time DATETIME)
+            date_time DATETIME,
+            FOREIGN KEY (activity_id) REFERENCES Activity(id))
                 """
         self.cursor.execute(query)
         self.db_connection.commit()
@@ -57,6 +61,17 @@ class InsertGeolifeDataset:
             print(f"Inserted {len(users)} users into the database.")
         except Exception as e:
             print(f"Failed to insert users batch: {e}")
+            
+            
+    def insert_user(self, user_id, has_labels):
+        try:
+            query = """INSERT INTO Users (id, has_labels) VALUES (%s, %s)"""
+            values = (user_id, has_labels)
+            self.cursor.execute(query, values)
+            self.db_connection.commit()
+            print(f"Inserted user {user_id} with labels: {has_labels}")
+        except Exception as e:
+            print(f"Failed to insert user {user_id}: {e}")
 
     # INSERT ACTIVITY DATA
     def insert_activity_data(self, user_id, transportation_mode, start_date_time, end_date_time):
@@ -109,6 +124,10 @@ class InsertGeolifeDataset:
                 }
         return labels
 
+
+
+
+
     # TRAVERSE THE FOLDER STRUCTURE
     def traverse_folder(self, folder_path):
         """
@@ -117,24 +136,22 @@ class InsertGeolifeDataset:
         labeled_users_file = os.path.join(folder_path, "labeled_ids.txt")
         labeled_users = self.read_labels(labeled_users_file)
 
-        users = []
+
         for root, dirs, files in os.walk(os.path.join(folder_path, "Data")):
             dirs.sort()  # Sort directories to ensure correct order
 
             for user_folder in dirs:
+                
                 user_folder_path = os.path.join(root, user_folder)
                 user_id = int(user_folder)  # Extract user ID from folder
                 has_labels = 1 if user_id in labeled_users else 0
 
                 # Collect users data for bulk insertion
-                users.append((user_id, has_labels))
                 print(f"Processing user {user_id}, labeled: {has_labels}")
-
+                self.insert_user(user_id, has_labels)
                 self.insert_activities_and_trackpoints(user_folder_path, user_id, has_labels)
 
-            # Batch insert users after all directories are processed
-        self.insert_users_batch(users)  # Removed break so all users are inserted
-
+            
     def insert_activities_and_trackpoints(self, file_path, user_id, has_labels):
         """
         Inserts activities and trackpoints in bulk for both labeled and non-labeled users
@@ -222,19 +239,20 @@ def main():
     try:
         program = InsertGeolifeDataset()
 
-        data_folder = "/Users/marte/store_d_ex2/dataset"  # Update with actual path
+        data_folder = "/Users/ceciliehuser/Documents/skole/NTNU/h24/store_distr_data/dataset"  # Update with actual path
 
         program.drop_table("TrackPoint")
-        program.drop_table("Users")
         program.drop_table("Activity")
+        program.drop_table("Users")
 
-        program.create_user_table("Users")
-        program.create_activity_table("Activity")
-        program.create_track_point_table("TrackPoint")
+
+        program.create_user_table()
+        program.create_activity_table()
+        program.create_track_point_table()
 
         program.traverse_folder(data_folder)
 
-        # Show first 20 rows of Users, Activity, and TrackPoint tables
+        #Show first 20 rows of Users, Activity, and TrackPoint tables
         print("\nFirst 20 rows from Users table:")
         program.show_20_rows("Users")
 
@@ -243,6 +261,16 @@ def main():
 
         print("\nFirst 20 rows from TrackPoint table:")
         program.show_20_rows("TrackPoint")
+        
+        
+        
+        print("\n get activity from user 10")
+        program.cursor.execute("SELECT * FROM Activity WHERE user_id = 10")
+        rows = program.cursor.fetchall()
+        print(tabulate(rows, headers=program.cursor.column_names))
+        
+        
+        
 
     except Exception as e:
         print(f"ERROR: Failed to use database: {e}")
