@@ -1,7 +1,7 @@
 from DbConnector import DbConnector
 from tabulate import tabulate
 from haversine import haversine
-from new_insertions import InsertGeolifeDataset
+from insertions_faster import InsertGeolifeDataset
 
 
 class Part2:
@@ -37,7 +37,7 @@ class Part2:
         """
         self.cursor.execute(query)
         avg_activities = self.cursor.fetchone()[0]
-        print(f"The average number of activities per user is: {avg_activities}")
+        print(f"The average number of activities per user is: {round(avg_activities,2)}")
         return avg_activities
 
     # 3. Find the top 20 users with the highest number of activities
@@ -62,8 +62,7 @@ class Part2:
         """
         self.cursor.execute(query)
         taxi_users = self.cursor.fetchall()
-        print("Users who have taken a taxi:")
-        print(taxi_users)
+        print(tabulate(taxi_users, headers=["User ID"]))
         return taxi_users
 
     # 5. Find all types of transportation modes and count how many activities that are
@@ -137,15 +136,41 @@ class Part2:
             # Calculate the distance between the two points using the haversine function
             total_distance += haversine(previous_point, current_point)
 
-        print(f"Distance walked by user 112 in 2008: {total_distance}")
+        
+        print(f"Distance walked by user 112 in 2008: {round(total_distance,2)} km")
         return total_distance
+
 
     # Denne må nok testes litt! Mulig det er mer komplisert enn det må være
     # Går veldig tregt
     # 8. Find the top 20 users who have gained the most altitude meters
+    # def find_altitude_gain_top_20_users(self):
+    #     query = """
+    #         SELECT a.user_id, SUM(tp2.altitude - tp1.altitude) AS altitude_gain
+    #         FROM TrackPoint tp1
+    #         JOIN TrackPoint tp2 ON tp1.activity_id = tp2.activity_id
+    #                             AND tp2.id = tp1.id + 1
+    #         JOIN Activity a ON tp1.activity_id = a.id
+    #         WHERE tp2.altitude != -777
+    #         AND tp1.altitude != -777
+    #         AND tp2.altitude > tp1.altitude
+    #         GROUP BY a.user_id
+    #         ORDER BY altitude_gain DESC
+    #         LIMIT 20;
+    #     """
+    #     self.cursor.execute(query)
+    #     top_users = self.cursor.fetchall()
+    #     print(tabulate(top_users, headers=["User ID", "Total altitude gained"]))
+    #     return top_users
+    
+
+
+
     def find_altitude_gain_top_20_users(self):
+        # Fetch altitude differences in feet, not converting in SQL
         query = """
-            SELECT a.user_id, SUM(tp2.altitude - tp1.altitude) AS altitude_gain
+            SELECT a.user_id, 
+                SUM(tp2.altitude - tp1.altitude) AS altitude_gain_feet
             FROM TrackPoint tp1
             JOIN TrackPoint tp2 ON tp1.activity_id = tp2.activity_id
                                 AND tp2.id = tp1.id + 1
@@ -154,13 +179,19 @@ class Part2:
             AND tp1.altitude != -777
             AND tp2.altitude > tp1.altitude
             GROUP BY a.user_id
-            ORDER BY altitude_gain DESC
+            ORDER BY altitude_gain_feet DESC
             LIMIT 20;
         """
+
         self.cursor.execute(query)
-        top_users = self.cursor.fetchall()
-        print(tabulate(top_users, headers=["User ID", "Total altitude gained"]))
-        return top_users
+        top_users_feet = self.cursor.fetchall()
+
+        # Convert altitude gain from feet to meters
+        top_users_meters = [(user_id, int(round(float(altitude_gain) * 0.3048))) for user_id, altitude_gain in top_users_feet]
+        print(tabulate(top_users_meters, headers=["User ID", "Total Altitude Gained (meters)"]))
+        return top_users_meters
+
+    
 
     # Går veldig tregt
     # 9. Find all users who have invalid activities, and the number of invalid activities per user 
@@ -185,14 +216,14 @@ class Part2:
             SELECT DISTINCT a.user_id
             FROM TrackPoint tp
             JOIN Activity a ON tp.activity_id = a.id
-            WHERE tp.lat = 39.916
-            AND tp.lon = 116.397;
+            WHERE tp.lat BETWEEN 39.9160000 AND 39.9169999
+            AND tp.lon BETWEEN 116.3970000 AND 116.3979999;
         """
         self.cursor.execute(query)
         rows = self.cursor.fetchall()
-        print("Users with activities in Forbidden City:")
-        print(rows)
+        print(tabulate(rows, headers=["User ID"]))
         return rows
+
 
     # 11. Find all users who have registered transportation_mode and their most used transportation_mode
     def find_most_used_transportation_per_user(self):

@@ -177,18 +177,22 @@ class InsertGeolifeDataset:
                 user_id = int(user_folder)  # Extract user ID from folder
                 has_labels = 1 if user_id in labeled_users else 0
                 trajectory_folder_path = os.path.join(user_folder_path, 'Trajectory')
+                labels_hashmap = None
+                if has_labels:
+                    labels_hashmap = self.create_label_hashmap(os.path.join(user_folder_path, 'labels.txt'))
 
                 # Collect users data for bulk insertion
                 print(f"Processing user {user_id}, labeled: {has_labels}")
                 self.insert_user(user_id, has_labels)
-                if has_labels:
-                    print("User has labels, inserting activities and trackpoints.")
-                    self.labels_insert_activities_and_trackpoints(user_folder_path, user_id)
-                else:
-                    print("User has no labels, inserting activities and trackpoints.")
-                    self.no_label_insert_activities_and_trackpoints(trajectory_folder_path, user_id)
+                # if has_labels:
+                #     print("User has labels, inserting activities and trackpoints.")
+                #     self.labels_insert_activities_and_trackpoints(user_folder_path, user_id)
+                # else:
+                #     print("User has no labels, inserting activities and trackpoints.")
+                
+                self.no_label_insert_activities_and_trackpoints(labels_hashmap,trajectory_folder_path, user_id, has_labels)
 
-    def no_label_insert_activities_and_trackpoints(self, trajectory_folder_path, user_id):
+    def no_label_insert_activities_and_trackpoints(self, labels_hashmap, trajectory_folder_path, user_id, label):
         for root, dirs, files in os.walk(trajectory_folder_path):
             # files.sort()
             
@@ -225,23 +229,63 @@ class InsertGeolifeDataset:
                     end_datetime = datetime.strptime(end_datetime_str, "%Y-%m-%d %H:%M:%S")
                     transportation_mode=None
                     # Step 3: Insert activity into the database 
-                    activity_id = self.insert_activity_data(user_id, transportation_mode, start_datetime, end_datetime)
-                    # Step 4: Insert all trackpoints within the interval
+                    if not label:
+                        activity_id = self.insert_activity_data(user_id, transportation_mode, start_datetime, end_datetime)
+                    
+                    if label:
+                        # Loop through the labels hashmap
+                        for (start_time, end_time), data in labels_hashmap.items():
+                            if start_time == start_datetime and end_time == end_datetime:
+                                transportation_mode = data['transportation_mode']
+                                activity_id = self.insert_activity_data(user_id, transportation_mode, start_datetime, end_datetime)
+                                      
+                                break
+                        if transportation_mode is None:
+                            activity_id = self.insert_activity_data(user_id, transportation_mode, start_datetime, end_datetime)
+                            
+                        # Step 4: Insert all trackpoint in the plt file to the batch
                     with open(plt_file_path, 'r') as f:
                         for line in itertools.islice(f, 6, None):
-                            
                             parts = line.strip().split(',')
                             lat, lon, altitude, date_days = float(parts[0]), float(parts[1]), float(parts[3]), float(parts[4])
                             timestamp = datetime.strptime(f"{parts[5]} {parts[6]}", "%Y-%m-%d %H:%M:%S")
                             trackpoints_to_insert.append((activity_id, lat, lon, altitude, date_days, timestamp))
                     
+                    
+                    
+                    #insert trackpoints in batch
                     if len(trackpoints_to_insert) >= BATCH_SIZE:
                         self.insert_track_points_batch(trackpoints_to_insert)
-                        trackpoints_to_insert = []
+                        trackpoints_to_insert = []  
+                        
+                    #insert remaining trackpoints
+            if trackpoints_to_insert:   
+                self.insert_track_points_batch(trackpoints_to_insert)
+                trackpoints_to_insert = []  
+ 
+                    
+                    
+                    
+                    
+                    
+                        
             #insert remaining trackpoints
             if trackpoints_to_insert:
                 self.insert_track_points_batch(trackpoints_to_insert)
                 trackpoints_to_insert = []
+
+
+
+
+
+     
+
+
+
+
+
+
+
 
     def labels_insert_activities_and_trackpoints(self, file_path, user_id):
         """
@@ -354,7 +398,7 @@ class InsertGeolifeDataset:
         self.db_connection.commit()
 
     def show_20_rows(self, table_name):
-        query = f"SELECT * FROM {table_name} LIMIT 20"
+        query = f"SELECT * FROM {table_name} LIMIT 10"
         self.cursor.execute(query)
         rows = self.cursor.fetchall()
         print(tabulate(rows, headers=self.cursor.column_names))
@@ -375,29 +419,25 @@ def main():
         program.create_activity_table()
         program.create_track_point_table()
 
-        program.insert_user(10, 1)
-        user_10_path = "/Users/ceciliehuser/Documents/skole/NTNU/h24/store_distr_data/dataset/Data/010"
-        program.labels_insert_activities_and_trackpoints(user_10_path, 10)
-
-
         program.traverse_folder(data_folder)
 
-        #Show first 20 rows of Users, Activity, and TrackPoint tables
-        # print("\nFirst 20 rows from Users table:")
-        # program.show_20_rows("Users")
 
-        # print("\nFirst 20 rows from Activity table:")
-        # program.show_20_rows("Activity")
+        #Show first 10 rows of Users, Activity, and TrackPoint tables
+        print("\nFirst 10 rows from Users table:")
+        program.show_20_rows("Users")
 
-        # print("\nFirst 20 rows from TrackPoint table:")
-        # program.show_20_rows("TrackPoint")
+        print("\nFirst 10 rows from Activity table:")
+        program.show_20_rows("Activity")
+
+        print("\nFirst 10 rows from TrackPoint table:")
+        program.show_20_rows("TrackPoint")
         
         
-        
-        # print("\n get activity from user 10")
-        # program.cursor.execute("SELECT * FROM Activity WHERE user_id = 10")
-        # rows = program.cursor.fetchall()
-        # print(tabulate(rows, headers=program.cursor.column_names))
+        #Get activity for user 10
+        print("\n get activity from user 10")
+        program.cursor.execute("SELECT * FROM Activity WHERE user_id = 10")
+        rows = program.cursor.fetchall()
+        print(tabulate(rows, headers=program.cursor.column_names))
         
         
         
