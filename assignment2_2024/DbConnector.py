@@ -18,8 +18,7 @@ class DbConnector:
                  HOST="localhost",
                  DATABASE="store_D",
                  USER="cecilhu",
-                 PASSWORD="heihallo",
-                 PORT: int = 3306):
+                 PASSWORD="heihallo"):
         # Connect to the database
         try:
             self.db_connection = mysql.connect(host=HOST, database=DATABASE, user=USER, password=PASSWORD, port=3306)
