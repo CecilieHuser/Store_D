@@ -2,6 +2,7 @@ from DbConnector import DbConnector
 from tabulate import tabulate
 from haversine import haversine
 from insertions_faster import InsertGeolifeDataset
+import numpy as np
 
 
 class Part2:
@@ -13,7 +14,7 @@ class Part2:
     # 1. How many users, activities and trackpoints are there in the dataset
     def find_number_of(self):
         # Count users
-        self.cursor.execute("SELECT COUNT(*) FROM Users")
+        self.cursor.execute("SELECT COUNT(*) FROM User")
         users_count = self.cursor.fetchone()[0]
         print(f"Total number of users: {users_count}")
 
@@ -114,9 +115,15 @@ class Part2:
         else:
             print(f"No, the year with the most activities ({most_activities_year[0]}) is different from the year with the most recorded hours ({result[0]}).")
         return result
-
+    
     # 7. Find the total distance (in km) walked in 2008, by user with id=112
     def find_total_distance_walked_2008_user112(self):
+        """
+        Finds the total distance (in km) walked in 2008 by user with id=112 using the haversine formula.
+        
+        Source for haversine: https://stackoverflow.com/questions/29545704/fast-haversine-approximation-python-pandas/29546836#29546836
+        """
+        # Query to select latitude and longitude for walks in 2008
         query = """
             SELECT lat, lon
             FROM TrackPoint tp
@@ -129,43 +136,38 @@ class Part2:
         trackpoints = self.cursor.fetchall()
 
         total_distance = 0.0
-        for i in range(1, len(trackpoints)):
-            # Fetch the latitude and longitude of the trackpoints
-            previous_point = (trackpoints[i-1][0], trackpoints[i-1][1])
-            current_point = (trackpoints[i][0], trackpoints[i][1])
-            # Calculate the distance between the two points using the haversine function
-            total_distance += haversine(previous_point, current_point)
 
-        
-        print(f"Distance walked by user 112 in 2008: {round(total_distance,2)} km")
+        # Loop through trackpoints and calculate the total distance in kilometers
+        for i in range(1, len(trackpoints)):
+            previous_point = trackpoints[i-1]
+            current_point = trackpoints[i]
+
+            # Extract latitudes and longitudes of the two points
+            lat1, lon1 = previous_point
+            lat2, lon2 = current_point
+
+            # Convert degrees to radians
+            lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+
+            # Haversine formula components
+            dlon = lon2 - lon1
+            dlat = lat2 - lat1
+
+            a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
+            c = 2 * np.arcsin(np.sqrt(a))
+
+            # Radius of Earth in kilometers (6378.137 km)
+            distance_km = 6378.137 * c
+
+            # Accumulate the total distance
+            total_distance += distance_km
+
+        # Output the total distance walked by user 112 in 2008
+        print(f"Total distance walked by user 112 in 2008: {round(total_distance, 2)} km")
         return total_distance
 
 
-    # Denne må nok testes litt! Mulig det er mer komplisert enn det må være
-    # Går veldig tregt
     # 8. Find the top 20 users who have gained the most altitude meters
-    # def find_altitude_gain_top_20_users(self):
-    #     query = """
-    #         SELECT a.user_id, SUM(tp2.altitude - tp1.altitude) AS altitude_gain
-    #         FROM TrackPoint tp1
-    #         JOIN TrackPoint tp2 ON tp1.activity_id = tp2.activity_id
-    #                             AND tp2.id = tp1.id + 1
-    #         JOIN Activity a ON tp1.activity_id = a.id
-    #         WHERE tp2.altitude != -777
-    #         AND tp1.altitude != -777
-    #         AND tp2.altitude > tp1.altitude
-    #         GROUP BY a.user_id
-    #         ORDER BY altitude_gain DESC
-    #         LIMIT 20;
-    #     """
-    #     self.cursor.execute(query)
-    #     top_users = self.cursor.fetchall()
-    #     print(tabulate(top_users, headers=["User ID", "Total altitude gained"]))
-    #     return top_users
-    
-
-
-
     def find_altitude_gain_top_20_users(self):
         # Fetch altitude differences in feet, not converting in SQL
         query = """
@@ -192,23 +194,23 @@ class Part2:
         return top_users_meters
 
     
-
-    # Går veldig tregt
     # 9. Find all users who have invalid activities, and the number of invalid activities per user 
     def find_invalid_activities(self):
         query = """
-            SELECT a.user_id, COUNT(a.id) AS number_of_invalid_activities
+            SELECT a.user_id, COUNT(DISTINCT a.id) AS number_of_invalid_activities
             FROM Activity a
-            JOIN TrackPoint trackpoint1 ON a.id = trackpoint1.activity_id
-            JOIN TrackPoint trackpoint2 ON a.id = trackpoint2.activity_id 
-                AND trackpoint2.id = trackpoint1.id + 1
-            WHERE TIMESTAMPDIFF(MINUTE, trackpoint1.date_time, trackpoint2.date_time) >= 5
+            JOIN TrackPoint tp1 ON a.id = tp1.activity_id
+            JOIN TrackPoint tp2 ON a.id = tp2.activity_id 
+                AND tp2.id = tp1.id + 1
+            WHERE TIMESTAMPDIFF(MINUTE, tp1.date_time, tp2.date_time) >= 5
             GROUP BY a.user_id;
         """
+
         self.cursor.execute(query)
         rows = self.cursor.fetchall()
-        print(tabulate(rows, headers=["User ID", "Number of invalid activities"]))
+        print(tabulate(rows, headers=["User ID", "Number of Invalid Activities"]))
         return rows
+
 
     # 10. Find the users who have tracked an activity in the Forbidden City of Beijing
     def find_users_in_forbidden_city(self):

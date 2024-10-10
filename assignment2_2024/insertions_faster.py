@@ -31,7 +31,7 @@ class InsertGeolifeDataset:
             - id (INT): Primary key, unique for each user.
             - has_labels (BOOLEAN): Indicates if the user has labels.
         """
-        query = f"""CREATE TABLE IF NOT EXISTS Users (
+        query = f"""CREATE TABLE IF NOT EXISTS User (
                    id INT NOT NULL PRIMARY KEY,
                    has_labels BOOLEAN)
                 """
@@ -56,7 +56,7 @@ class InsertGeolifeDataset:
             transportation_mode VARCHAR(30),
             start_date_time DATETIME,
             end_date_time DATETIME,
-            FOREIGN KEY (user_id) REFERENCES Users(id)
+            FOREIGN KEY (user_id) REFERENCES User(id)
 )
         """
         self.cursor.execute(query)
@@ -102,7 +102,7 @@ class InsertGeolifeDataset:
         if has_labels:
             labeltext = "LABELED"
         try:
-            query = """INSERT INTO Users (id, has_labels) VALUES (%s, %s)"""
+            query = """INSERT INTO User (id, has_labels) VALUES (%s, %s)"""
             values = (user_id, has_labels)
             self.cursor.execute(query, values)
             self.db_connection.commit()
@@ -338,7 +338,7 @@ def main():
         # Drop tables if they exist
         program.drop_table("TrackPoint")
         program.drop_table("Activity")
-        program.drop_table("Users")
+        program.drop_table("User")
 
 #------------------ CREATE TABLES & INSERT DATA---------------------
         
