@@ -353,7 +353,7 @@ def main():
 #--------------------------SHOW DATA-----------------------------
         #Show first 10 rows of Users, Activity, and TrackPoint tables
         print("\nFirst 10 rows from Users table:")
-        program.show_20_rows("Users")
+        program.show_20_rows("User")
 
         print("\nFirst 10 rows from Activity table:")
         program.show_20_rows("Activity")

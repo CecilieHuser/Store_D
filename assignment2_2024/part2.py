@@ -11,14 +11,14 @@ class Part2:
         self.db_connection = self.connection.db_connection
         self.cursor = self.connection.cursor
     
-    # 1. How many users, activities and trackpoints are there in the dataset
+    #1. How many users, activities and trackpoints are there in the dataset
     def find_number_of(self):
-        # Count users
+        # Counting users
         self.cursor.execute("SELECT COUNT(*) FROM User")
         users_count = self.cursor.fetchone()[0]
         print(f"Total number of users: {users_count}")
 
-        # Count activities
+        # Counting activities
         self.cursor.execute("SELECT COUNT(*) FROM Activity")
         activities_count = self.cursor.fetchone()[0]
         print(f"Total number of activities: {activities_count}")
@@ -30,18 +30,27 @@ class Part2:
         
         return users_count, activities_count, trackpoints_count
 
-    # 2. Find the average number of activities per user
+    #2. Find the average number of activities per user, including users with zero activities
     def find_avg_activities_per_user(self):
         query = """
-            SELECT AVG(number_of_activities) FROM 
-            (SELECT COUNT(*) as number_of_activities FROM Activity GROUP BY user_id) as avg_activity;
+            SELECT AVG(activity_count) FROM (
+                SELECT u.id, 
+                    CASE 
+                        WHEN COUNT(a.id) IS NULL THEN 0
+                        ELSE COUNT(a.id)
+                    END AS activity_count
+                FROM User u
+                LEFT JOIN Activity a ON u.id = a.user_id
+                GROUP BY u.id
+            ) AS activity_per_user;
         """
         self.cursor.execute(query)
         avg_activities = self.cursor.fetchone()[0]
-        print(f"The average number of activities per user is: {round(avg_activities,2)}")
+        print(f"The average number of activities per user is: {round(avg_activities, 2)}")
         return avg_activities
 
-    # 3. Find the top 20 users with the highest number of activities
+
+    #3. Find the top 20 users with the highest number of activities
     def find_most_active_20_users(self):
         query = """
             SELECT user_id, COUNT(*) as number_of_activities 
@@ -55,7 +64,7 @@ class Part2:
         print(tabulate(top_users, headers=["User ID", "Activity count"]))
         return top_users
 
-    # 4. Find all users who have taken a taxi
+    #4. Find all users who have taken a taxi
     def find_taxi_users(self):
         query = """SELECT DISTINCT user_id 
         FROM Activity 
@@ -66,7 +75,7 @@ class Part2:
         print(tabulate(taxi_users, headers=["User ID"]))
         return taxi_users
 
-    # 5. Find all types of transportation modes and count how many activities that are
+    #5. Find all types of transportation modes and count how many activities that are
     # tagged with these transportation mode labels. Do not count the rows where the mode is null
     def count_transportation_modes(self):
         query = """
@@ -80,7 +89,7 @@ class Part2:
         print(tabulate(transportation_mode, headers=["Transportation mode", "Count"]))
         return transportation_mode
 
-    # 6. a) Find the year with the most activities.
+    #6. a) Find the year with the most activities.
     def find_year_with_most_activities(self):
         query = """
             SELECT YEAR(start_date_time) as year, COUNT(*) as number_of_activities
@@ -94,7 +103,7 @@ class Part2:
         print(f"Year with most activities: {result[0]} with {result[1]} activities.")
         return result
     
-    # 6. b) Is this also the year with most recorded hours?
+    #6. b) Is this also the year with most recorded hours?
     def find_year_with_most_hours(self):
         query = """
             SELECT YEAR(start_date_time) as year, 
@@ -108,7 +117,7 @@ class Part2:
         result = self.cursor.fetchone()
         print(f"Year with most recorded hours: {result[0]} with {result[1]} hours.")
 
-        # Compare to the year with the most activities
+        #Comparing to the year with the most activities
         most_activities_year = self.find_year_with_most_activities()
         if most_activities_year[0] == result[0]:
             print(f"Yes, the year {most_activities_year[0]} has the most activities and also the most recorded hours.")
@@ -116,7 +125,7 @@ class Part2:
             print(f"No, the year with the most activities ({most_activities_year[0]}) is different from the year with the most recorded hours ({result[0]}).")
         return result
     
-    # 7. Find the total distance (in km) walked in 2008, by user with id=112
+    #7. Find the total distance (in km) walked in 2008, by user with id=112
     def find_total_distance_walked_2008_user112(self):
         """
         Finds the total distance (in km) walked in 2008 by user with id=112 using the haversine formula.
@@ -137,42 +146,41 @@ class Part2:
 
         total_distance = 0.0
 
-        # Loop through trackpoints and calculate the total distance in kilometers
+        #Looping through trackpoints and calculating the total distance in kilometers
         for i in range(1, len(trackpoints)):
             previous_point = trackpoints[i-1]
             current_point = trackpoints[i]
 
-            # Extract latitudes and longitudes of the two points
+            #Extract latitudes and longitudes for both points
             lat1, lon1 = previous_point
             lat2, lon2 = current_point
 
-            # Convert degrees to radians
+            #Converting degrees to radians
             lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
 
-            # Haversine formula components
+            #Haversine formula components
             dlon = lon2 - lon1
             dlat = lat2 - lat1
 
             a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
             c = 2 * np.arcsin(np.sqrt(a))
 
-            # Radius of Earth in kilometers (6378.137 km)
+            #Radius of Earth = 6378.137 km
             distance_km = 6378.137 * c
 
-            # Accumulate the total distance
+            #Accumulate the total distance
             total_distance += distance_km
 
-        # Output the total distance walked by user 112 in 2008
         print(f"Total distance walked by user 112 in 2008: {round(total_distance, 2)} km")
         return total_distance
 
 
-    # 8. Find the top 20 users who have gained the most altitude meters
+    #8. Find the top 20 users who have gained the most altitude meters
     def find_altitude_gain_top_20_users(self):
-        # Fetch altitude differences in feet, not converting in SQL
+        # Fetching altitude differences directly in meters, excluding invalid (-777) and negative altitude values below -413
         query = """
             SELECT a.user_id, 
-                SUM(tp2.altitude - tp1.altitude) AS altitude_gain_feet
+                SUM((tp2.altitude - tp1.altitude) * 0.3048) AS altitude_gain_meters
             FROM TrackPoint tp1
             JOIN TrackPoint tp2 ON tp1.activity_id = tp2.activity_id
                                 AND tp2.id = tp1.id + 1
@@ -180,21 +188,22 @@ class Part2:
             WHERE tp2.altitude != -777
             AND tp1.altitude != -777
             AND tp2.altitude > tp1.altitude
+            AND tp1.altitude >= -413
+            AND tp2.altitude >= -413
             GROUP BY a.user_id
-            ORDER BY altitude_gain_feet DESC
+            ORDER BY altitude_gain_meters DESC
             LIMIT 20;
         """
 
         self.cursor.execute(query)
-        top_users_feet = self.cursor.fetchall()
-
-        # Convert altitude gain from feet to meters
-        top_users_meters = [(user_id, int(round(float(altitude_gain) * 0.3048))) for user_id, altitude_gain in top_users_feet]
+        top_users_meters = self.cursor.fetchall()
         print(tabulate(top_users_meters, headers=["User ID", "Total Altitude Gained (meters)"]))
         return top_users_meters
 
     
-    # 9. Find all users who have invalid activities, and the number of invalid activities per user 
+        # 9. Find all users who have invalid activities, and the number of invalid activities per user 
+
+    
     def find_invalid_activities(self):
         query = """
             SELECT a.user_id, COUNT(DISTINCT a.id) AS number_of_invalid_activities
@@ -208,11 +217,28 @@ class Part2:
 
         self.cursor.execute(query)
         rows = self.cursor.fetchall()
-        print(tabulate(rows, headers=["User ID", "Number of Invalid Activities"]))
+
+        # Format rows for 4 columns per row, with vertical lines between ID-Invalid pairs
+        compact_rows = []
+        for i in range(0, len(rows), 6):
+            row = []
+            for j in range(6):
+                if i + j < len(rows):
+                    # Left-align ID, right-align Invalid Activities
+                    row.append(f"{rows[i + j][0]:<6} {rows[i + j][1]:>7}")
+                else:
+                    row.append(" " * 12)  # Fill with spaces if fewer than 4 users
+            compact_rows.append(row)
+
+        # Create custom headers
+        headers = ["ID      Count", "ID      Count", "ID      Count", "ID      Count", "ID      Count",  "ID      Count"]
+
+        # Create table with vertical separators only between ID-Invalid pairs
+        print(tabulate(compact_rows, headers=headers, tablefmt="grid"))
+
         return rows
 
-
-    # 10. Find the users who have tracked an activity in the Forbidden City of Beijing
+    #10. Find the users who have tracked an activity in the Forbidden City of Beijing
     def find_users_in_forbidden_city(self):
         query = """
             SELECT DISTINCT a.user_id
@@ -227,7 +253,7 @@ class Part2:
         return rows
 
 
-    # 11. Find all users who have registered transportation_mode and their most used transportation_mode
+    #11. Find all users who have registered transportation_mode and their most used transportation_mode
     def find_most_used_transportation_per_user(self):
         query = """
             SELECT user_id, transportation_mode, COUNT(*) as mode_count
@@ -239,14 +265,13 @@ class Part2:
         self.cursor.execute(query)
         users_transportation_mode = self.cursor.fetchall()
         
-        # Finding most used mode per user
+        #Finding most used mode per user
         most_used_modes = {}
         for row in users_transportation_mode:
             user_id = row[0]
             if user_id not in most_used_modes:
                 most_used_modes[user_id] = row[1]
 
-        # Display the results
         result = [(user_id, mode) for user_id, mode in most_used_modes.items()]
         print(tabulate(result, headers=["User ID", "Most used transportation mode"]))
         return result
