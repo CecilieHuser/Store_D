@@ -2,9 +2,6 @@ import os
 from datetime import datetime
 from DbConnector import DbConnector
 from tabulate import tabulate
-import pandas as pd
-import time
-from intervaltree import Interval, IntervalTree
 import itertools
 
 
@@ -162,7 +159,7 @@ class InsertGeolifeDataset:
         labeled_users = set()
         with open(labels_file_path, 'r') as file:
             for line in file:
-                labeled_users.add(int(line.strip()))  # Assume each line contains a user ID (e.g., 45)
+                labeled_users.add(int(line.strip()))  #Assume each line contains a user ID (e.g., 45)
         return labeled_users
 
     def create_label_hashmap(self, labels_file_path):
@@ -177,7 +174,7 @@ class InsertGeolifeDataset:
         labels = {}
 
         with open(labels_file_path, 'r') as file:
-            next(file)  # Skip header line
+            next(file)  #Skip header line
             for line in file:
                 start_time_str, end_time_str, transportation_mode = line.strip().split('\t')
                 start_time = datetime.strptime(start_time_str, "%Y/%m/%d %H:%M:%S")
@@ -205,7 +202,7 @@ class InsertGeolifeDataset:
         for root, dirs, files in os.walk(os.path.join(folder_path, "Data")):
             dirs.sort()  # Sort directories to ensure correct order
 
-            # Iterate through each user folder
+            #Iterate through each user folder
             for user_folder in dirs:
                 if user_folder == "Trajectory":
                     break
@@ -224,17 +221,17 @@ class InsertGeolifeDataset:
                 # Collect users data and insert into the database
                 self.insert_user(user_id, has_labels)
               
-                # Insert activities and trackpoints
+                #Insert activities and trackpoints
                 self.insert_activities_and_trackpoints(labels_hashmap,trajectory_folder_path, user_id, has_labels)
 
     def insert_activities_and_trackpoints(self, labels_hashmap, trajectory_folder_path, user_id, label):
         for root, dirs, files in os.walk(trajectory_folder_path):
 
                         
-            trackpoints_to_insert = [] # List to store trackpoints for batch insert
-            BATCH_SIZE = 2000  # Batch size for inserting trackpoints
+            trackpoints_to_insert = [] #List to store trackpoints for batch insert
+            BATCH_SIZE = 2000  #Batch size for inserting trackpoints
 
-            # Iterate through each .plt file inside the trajectory folder and add activity and trackpoints to database
+            #Iterate through each .plt file inside the trajectory folder and add activity and trackpoints to database
             for plt_file in files:
                 if plt_file.endswith('.plt'):
                     plt_file_path = os.path.join(trajectory_folder_path, plt_file)
@@ -243,7 +240,7 @@ class InsertGeolifeDataset:
                     with open(plt_file_path, 'r') as f:
                         total_lines = sum(1 for _ in f)
                     if total_lines - 6 > 2500:  # Skip files with more than 2500 trackpoints
-                        # print(f"Skipping large file {total_lines - 6} trackpoints.")
+                        # print(f"Skipping large file {total_lines-6} trackpoints.")
                         continue
                     
                     
@@ -331,14 +328,26 @@ def main():
     program = None
     try:
         program = InsertGeolifeDataset()
+        
+        
+#--------------------------GET RELATIVE PATH FOR THE DATASET-----------------------------
+        current_dir = os.path.dirname(os.path.realpath(__file__))
 
-        data_folder = "/Users/ceciliehuser/Documents/skole/NTNU/h24/store_distr_data/dataset"  # Update with actual path
+        dataset_dir = os.path.join(current_dir, '../../dataset')
+
+        dataset_dir = os.path.normpath(dataset_dir)
+
+
+
 
 #--------------------------DELETE TABLES-----------------------------
         # Drop tables if they exist
         program.drop_table("TrackPoint")
+        print("TrackPoint table dropped")
         program.drop_table("Activity")
+        print("Activity table dropped")
         program.drop_table("User")
+        print("User table dropped")
 
 #------------------ CREATE TABLES & INSERT DATA---------------------
         
@@ -348,7 +357,8 @@ def main():
         program.create_track_point_table()
 
         # Insert data
-        program.traverse_folder(data_folder)
+        print(f"Accessing dataset from: {dataset_dir}\n...")
+        program.traverse_folder(dataset_dir)
 
 #--------------------------SHOW DATA-----------------------------
         #Show first 10 rows of Users, Activity, and TrackPoint tables
