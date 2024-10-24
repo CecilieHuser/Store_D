@@ -13,11 +13,11 @@ class DbConnector:
     """
 
     def __init__(self,
-                 DATABASE='DATABASE_NAME',
-                 HOST="tdt4225-xx.idi.ntnu.no",
-                 USER="TEST_USER",
-                 PASSWORD="test123"):
-        uri = "mongodb://%s:%s@%s/%s" % (USER, PASSWORD, HOST, DATABASE)
+                 DATABASE='store_D',
+                 HOST="localhost",  # Assuming you're accessing the MongoDB container locally
+                 USER="admin",      # MongoDB root username from the Docker Compose file
+                 PASSWORD="secret"):  # MongoDB root password from the Docker Compose file
+        uri = f"mongodb://{USER}:{PASSWORD}@{HOST}/{DATABASE}?authSource=admin"
         # Connect to the databases
         try:
             self.client = MongoClient(uri)
