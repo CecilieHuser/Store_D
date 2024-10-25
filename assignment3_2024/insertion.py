@@ -11,17 +11,30 @@ class InsertGeolifeDatasetMongo:
     """
 
     def __init__(self):
+        """
+        Initializes the MongoDB connection.
+        """
         self.connection = DbConnector()
         self.client = self.connection.client
         self.db = self.connection.db
+        
+        
+#--------------------------CREATE COLLECTIONS-----------------------------
 
     def create_coll(self, collection_name):
+        """
+        Creates a collection in the MongoDB database.
+        Args:
+            collection_name ( ): The name of the collection to create.
+        """
         try:
             self.db.create_collection(collection_name)    
             print(f'Created collection: {collection_name}')
         except Exception as e:
             print(f"Failed to create collection {collection_name}: {e}")
 
+
+#--------------------------INSERT DOCUMENTS-----------------------------
     def insert_user(self, user_id, has_labels):
         """
         Inserts a user into the MongoDB collection 'User'.
@@ -53,6 +66,8 @@ class InsertGeolifeDatasetMongo:
         except Exception as e:
             print(f"Failed to insert activity for user {user_id}: {e}")
 
+#--------------------------LABELS DATASTRUCTURES-----------------------------
+
     def read_labels(self, labels_file_path):
         labeled_users = set()
         with open(labels_file_path, 'r') as file:
@@ -75,6 +90,8 @@ class InsertGeolifeDatasetMongo:
         print(f"Created label hashmap: {labels}")
         return labels
 
+
+#--------------------------TRAVERSE FOLDER-----------------------------
     def traverse_folder(self, folder_path):
         labeled_users_file = os.path.join(folder_path, "labeled_ids.txt")
         labeled_users = self.read_labels(labeled_users_file)
@@ -100,6 +117,8 @@ class InsertGeolifeDatasetMongo:
                 self.insert_user(user_id, has_labels)
                 self.insert_activities_and_trackpoints(labels_hashmap, trajectory_folder_path, user_id, has_labels)
 
+#--------------------------INSERT ACTIVITIES AND TRACKPOINTS-----------------------------
+  
     def insert_activities_and_trackpoints(self, labels_hashmap, trajectory_folder_path, user_id, label):
         for root, dirs, files in os.walk(trajectory_folder_path):
             for plt_file in files:
@@ -150,19 +169,72 @@ class InsertGeolifeDatasetMongo:
 
                     self.insert_activity_data(user_id, transportation_mode, start_datetime, end_datetime, trackpoints)
 
-    def fetch_first_20_users(self):
+#--------------------------DROP COLLECTIONS-----------------------------
+    def drop_coll(self, collection_name):
+        """
+        Drops a collection from the MongoDB database.
+        Args:
+            collection_name ( ): The name of the collection to drop.
+        """
+        try:
+            self.db[collection_name].drop()
+            print(f"Dropped collection: {collection_name}")
+        except Exception as e:
+            print(f"Failed to drop collection {collection_name}: {e}")
+            
+#--------------------------FETCH DOCUMENTS-----------------------------
+    def fetch_first_10_users(self):
         """
         Fetch and print the first 20 documents from the User collection.
         """
         users = self.db['User'].find().limit(10)
-        print("First 20 users:")
+        print("First 10 users:")
         for user in users:
             pprint(user)
+            
+    def fetch_first_10_activities(self):
+        """
+        Fetch and print the first activity document from the Activity collection.
+        Only include the first two trackpoints, followed by "..." to indicate more trackpoints exist.
+        """
+        activities = self.db['Activity'].find().limit(10)
+        no=0
+        for activity in activities:
+            no+=1
+            print("#", no)
+            activity['trackpoints'] = [{"..."},"...", {"..."}]
+            pprint(activity)
+            
+        print("Printed activities:")
+   
+   
+   
+    def fetch_first_10_trackpoints_in_activity(self):
+        """
+        Fetch and print the first activity document from the Activity collection.
+        Only include the first two trackpoints, followed by "..." to indicate more trackpoints exist.
+        """
+        activities = self.db['Activity'].find().limit(1)
+        print("First 10 trackpoints for user ", activities[0]['user_id'])
+        for activity in activities:
+            if 'trackpoints' in activity and len(activity['trackpoints']) > 2:
+                activity['trackpoints'] = activity['trackpoints'][:10] 
+            pprint(activity)
+            
+    
+    
+
 
 def main():
     program = None
     try:
         program = InsertGeolifeDatasetMongo()
+        
+#--------------------------DROP COLLECTIONS-----------------------------
+        program.drop_coll(collection_name="User")
+        program.drop_coll(collection_name="Activity")
+
+#--------------------------CREATE COLLECTIONS-----------------------------
 
         program.create_coll(collection_name="User")
         program.create_coll(collection_name="Activity")
@@ -173,8 +245,16 @@ def main():
 
         program.traverse_folder(dataset_dir)
 
-        program.fetch_first_20_users()
 
+
+#--------------------------FETCH DOCUMENTS-----------------------------
+        program.fetch_first_10_users()
+        print("-----------------------------------------------")
+        program.fetch_first_10_activities()
+        print("-----------------------------------------------")
+        program.fetch_first_10_trackpoints_in_activity()
+        
+        
     except Exception as e:
         print(f"ERROR: Failed to use MongoDB: {e}")
     finally:
