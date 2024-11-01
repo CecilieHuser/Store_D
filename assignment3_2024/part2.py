@@ -34,11 +34,7 @@ class Part2:
         total_users = self.db['User'].count_documents({})
         total_activities = sum(item['activity_count'] for item in user_activity_count)
 
-        if total_users > 0:
-            average = total_activities / total_users
-            print(f"The average number of activities per user is: {round(average, 2)}")
-        else:
-            print("No users found.")
+        print(f"The average number of activities per user is: {round(total_activities / total_users, 2)}")
 
     # 3. Find the top 20 users with the highest number of activities
     def find_most_active_20_users(self):
@@ -194,7 +190,7 @@ class Part2:
             {"$unwind": "$trackpoints"},
             {
                 "$match": {
-                    "trackpoints.altitude": {"$gt": -777}  # Filter out invalid altitudes (-777)
+                    "trackpoints.altitude": {"$gt": -413}  # Filter out invalid altitudes (-413)
                 }
             },
             {
@@ -203,7 +199,7 @@ class Part2:
                         "user_id": "$user_id",  # Group by user
                         "activity_id": "$_id"  # Group by activity
                     },
-                    "trackpoints": {
+                    "trackpoints": {    
                         "$push": "$trackpoints.altitude"  # Fetch all altitudes for an activity
                     }
                 }
@@ -214,7 +210,7 @@ class Part2:
                     "total_gain": {
                         "$sum": {
                             "$map": {
-                                "input": {"$range": [1, {"$size": "$trackpoints"}]},  # Iterate over trackpoints
+                                "input": {"$range": [1, {"$size": "$trackpoints"}]},  # Iterate trackPts
                                 "as": "idx",
                                 "in": {
                                     "$cond": [
@@ -292,7 +288,24 @@ class Part2:
         # Print results
         if invalid_activities_per_user:
             rows = [[user_id, invalid_activities_per_user[user_id]] for user_id in invalid_activities_per_user]
-            print(tabulate(rows, headers=["User ID", "Invalid Activity Count"], tablefmt="fancy_grid"))
+
+            # Format rows for 4 columns per row, with vertical lines between ID-Invalid pairs
+            compact_rows = []
+            for i in range(0, len(rows), 6):
+                row = []
+                for j in range(6):
+                    if i + j < len(rows):
+                        # Left-align ID, right-align Invalid Activities
+                        row.append(f"{rows[i + j][0]:<6} {rows[i + j][1]:>7}")
+                    else:
+                        row.append(" " * 12)  # Fill with spaces if fewer than 4 users
+                compact_rows.append(row)
+
+            # Create custom headers 
+            headers = ["ID      Count", "ID      Count", "ID      Count", "ID      Count", "ID      Count",  "ID      Count"]
+
+            # Create table with vertical separators only between ID-Invalid pairs
+            print(tabulate(compact_rows, headers=headers, tablefmt="grid"))
         else:
             print("No invalid activities found.")
 
@@ -315,16 +328,17 @@ class Part2:
         else:
             print("No users found in the Forbidden City.")
 
+    # 11. Find the most used transportation mode per user
     def find_most_used_transportation_per_user(self):
         most_used_mode = self.db['Activity'].aggregate([
-            {"$match": {"transportation_mode": {"$ne": None}}},  # Filter out those that have no mode
+            {"$match": {"transportation_mode": {"$ne": None}}},  # Filter out no mode
             {
                 "$group": {
                     "_id": {
                         "user_id": "$user_id",
                         "transportation_mode": "$transportation_mode"
                     },
-                    "count": {"$sum": 1}  # Count the number of each transportation mode per user
+                    "count": {"$sum": 1}  # Count number of each transportation mode per user
                 }
             },
             {"$sort": {"_id.user_id": 1, "count": -1}},  # Sort by user_id
